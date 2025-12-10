@@ -1,20 +1,21 @@
-use std::collections::BTreeMap;
+use crossbeam_skiplist::SkipMap;
 
-use crate::utils::{value::Value};
+use crate::utils::value::Value;
 
 #[derive(Debug)]
 pub struct MemTable {
-    entries: BTreeMap<String, Value>,
+    entries: SkipMap<String, Value>,
 }
 
 impl MemTable {
     pub fn new() -> Self {
         Self {
-            entries: BTreeMap::new(),
+            entries: SkipMap::new(),
         }
     }
 
-    pub fn insert(&mut self, key: String, value: Value) {
+    pub fn insert(&self, key: String, value: Value) {
+        // SkipMap::insert takes &self, so we can take &self here instead of &mut self
         self.entries.insert(key, value);
     }
 
@@ -26,15 +27,21 @@ impl MemTable {
         self.entries.is_empty()
     }
 
-    pub fn get(&self, key: &str) -> Option<&Value> {
-        self.entries.get(key)
+    pub fn get(&self, key: &str) -> Option<Value> {
+        // SkipMap::get returns an EntryRef, we need to clone the value
+        self.entries.get(key).map(|entry| entry.value().clone())
     }
 
-    pub fn drain_sorted(&mut self) -> Vec<(String, Value)> {
+    pub fn drain_sorted(&self) -> Vec<(String, Value)> {
         let mut drained = Vec::with_capacity(self.entries.len());
-        for (key, value) in std::mem::take(&mut self.entries) {
-            drained.push((key, value));
+        // SkipMap maintains sorted order, so we can iterate directly
+        // Note: crossbeam-skiplist uses epoch-based reclamation, so we need to collect
+        // all entries first before clearing
+        for entry in self.entries.iter() {
+            drained.push((entry.key().clone(), entry.value().clone()));
         }
+        // Clear all entries after collecting
+        self.entries.clear();
         drained
     }
 }

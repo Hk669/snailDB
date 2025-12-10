@@ -6,8 +6,9 @@ use anyhow::{Context, Result};
 
 use crate::engine::memtable::MemTable;
 use crate::engine::sstable::SsTable;
-use crate::utils::{value::Value};
 use crate::engine::wal::Wal;
+use crate::utils::value::Value;
+use tracing::info;
 
 const DEFAULT_FLUSH_THRESHOLD: usize = 128;
 
@@ -26,7 +27,7 @@ impl LsmTree {
         fs::create_dir_all(&base_path)?;
         let wal_path = base_path.join("wal.log");
         let wal = Wal::open(&wal_path)?;
-        let mut memtable = MemTable::new();
+        let memtable = MemTable::new();
 
         for (key, value) in wal.replay()? {
             memtable.insert(key, value);
@@ -95,12 +96,23 @@ impl LsmTree {
             return Ok(());
         }
 
-        let entries = self.memtable.drain_sorted();
+        let pending = self.memtable.len();
         let file_name = format!("sst-{}.sst", unix_millis());
         let path = self.data_dir.join(file_name);
+        info!(
+            entry_count = pending,
+            path = %path.display(),
+            "flushing memtable to SSTable"
+        );
+        let entries = self.memtable.drain_sorted();
         let table = SsTable::create(&path, entries).with_context(|| "failed to create SSTable")?;
         self.sstables.insert(0, table);
         self.wal.reset().with_context(|| "failed to reset WAL")?;
+        info!(
+            entry_count = pending,
+            path = %path.display(),
+            "memtable flush complete"
+        );
         Ok(())
     }
 }
