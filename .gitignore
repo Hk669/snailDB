@@ -3,3 +3,4 @@ data/
 bench-data/
 bench-*/
 bin/
+scripts/
