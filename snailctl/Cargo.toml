@@ -1,0 +1,14 @@
+[package]
+name = "snailctl"
+version.workspace = true
+edition.workspace = true
+default-run = "snailctl"
+
+[dependencies]
+snaildb = { path = "../snaildb" }
+axum = "0.8.7"
+tokio = { version = "1.41", features = ["macros", "rt-multi-thread", "net", "sync"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
