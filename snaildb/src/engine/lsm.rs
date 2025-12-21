@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 
 use crate::engine::memtable::MemTable;
 use crate::engine::sstable::SsTable;
-use crate::engine::wal::Wal;
+use crate::wal::wal::Wal;
 use crate::utils::value::Value;
 use tracing::info;
 
