@@ -4,3 +4,4 @@ bench-data/
 bench-*/
 bin/
 scripts/
+.cursor/
