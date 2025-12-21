@@ -3,6 +3,7 @@ name = "snaildb"
 version.workspace = true
 edition.workspace = true
 description = "An embedded, persistent key-value store with high write throughput and durability"
+readme = "../README.md"
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
