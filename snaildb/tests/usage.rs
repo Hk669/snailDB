@@ -38,7 +38,7 @@ fn test_custom_flush_threshold() -> Result<()> {
     let db_path = temp_dir.path().join("test_db");
     
     let mut db = LsmTree::open(&db_path)?
-        .with_flush_threshold(256); // Flush memtable after 256 entries
+        .with_flush_threshold(256 * 1024 * 1024); // Flush memtable after 256 MiB (for testing)
     
     // Verify it works
     db.put("test", b"value")?;

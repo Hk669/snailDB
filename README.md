@@ -68,7 +68,7 @@ fn main() -> Result<()> {
 use snaildb::engine::lsm::LsmTree;
 
 let mut db = LsmTree::open("./data")?
-    .with_flush_threshold(256); // Flush memtable after 256 entries
+    .with_flush_threshold(256 * 1024 * 1024); // Flush memtable after 256 MiB
 ```
 
 #### Working with Strings
@@ -78,7 +78,6 @@ let mut db = LsmTree::open("./data")?;
 
 // Store string values
 db.put("name", "snaildb")?;
-db.put("version", "0.1.0")?;
 
 // Retrieve as string
 if let Some(bytes) = db.get("name")? {
@@ -112,11 +111,11 @@ See the [examples directory](./examples) for more detailed usage examples.
 
 ### Flush Threshold
 
-The flush threshold determines when the in-memory memtable is flushed to disk as an SSTable. Default is 128 entries.
+The flush threshold determines when the in-memory memtable is flushed to disk as an SSTable. Default is 250 MiB.
 
 ```rust
 let mut db = LsmTree::open("./data")?
-    .with_flush_threshold(256); // Custom threshold
+    .with_flush_threshold(256 * 1024 * 1024); // Custom threshold
 ```
 
 ## Architecture
