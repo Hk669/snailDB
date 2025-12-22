@@ -13,13 +13,6 @@ An embedded, persistent key-value store written in Rust.
 - **High write throughput** - Optimized for write-heavy workloads
 - **Durability** - Write-ahead logging (WAL) ensures data persistence
 
-## Features
-
-- LSM-tree based storage engine
-- Write-ahead logging (WAL) for durability
-- Embedded library for use in Rust applications
-- Thread-safe operations
-
 ## Installation
 
 Add to your `Cargo.toml`:
