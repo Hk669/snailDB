@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use crate::utils::{
@@ -9,14 +9,22 @@ use crate::utils::{
 
 #[derive(Clone, Debug)]
 pub struct Entry {
+    /// the key of the entry
     key: String,
+    /// the value of the entry
     value: Value,
 }
 
 #[derive(Debug)]
 pub struct SsTable {
-    path: PathBuf,
-    entries: Vec<Entry>,
+    /// the path to the sstable file
+    path: PathBuf, 
+    /// the entries in the sstable
+    entries: Vec<Entry>, 
+    /// the minimum key in the sstable
+    min_key: String, 
+    /// the maximum key in the sstable
+    max_key: String, 
 }
 
 impl SsTable {
@@ -43,6 +51,16 @@ impl SsTable {
                 }
             }
         }
+        let min_key = entries.first().map(|(key, _)| key.clone()).unwrap();
+        let max_key = entries.last().map(|(key, _)| key.clone()).unwrap();
+
+        // Write footer: [min_key_len:4][min_key:var][max_key_len:4][max_key:var][footer_offset:8]
+        let footer_offset = file.stream_position()?;
+        file.write_all(&(min_key.len() as u32).to_le_bytes())?;
+        file.write_all(min_key.as_bytes())?;
+        file.write_all(&(max_key.len() as u32).to_le_bytes())?;
+        file.write_all(max_key.as_bytes())?;
+        file.write_all(&footer_offset.to_le_bytes())?;  // 8 bytes, always last
 
         file.flush()?;
         file.sync_all()?;
@@ -55,6 +73,8 @@ impl SsTable {
         Ok(Self {
             path,
             entries: stored_entries,
+            min_key,
+            max_key,
         })
     }
 
@@ -79,7 +99,9 @@ impl SsTable {
             });
         }
 
-        Ok(Self { path, entries })
+        let (min_key, max_key) = read_footer(&mut file)?;
+
+        Ok(Self { path, entries, min_key, max_key })
     }
 
     pub fn path(&self) -> &Path {
@@ -92,10 +114,42 @@ impl SsTable {
             .ok()
             .map(|idx| self.entries[idx].value.clone())
     }
+
+    pub fn might_contain_key(&self, key: &str) -> bool {
+        key >= self.min_key.as_str() && key <= self.max_key.as_str()
+    }
 }
 
 fn read_entry_count<R: Read>(reader: &mut R) -> io::Result<u32> {
     let mut buf = [0u8; 4];
     reader.read_exact(&mut buf)?;
     Ok(u32::from_le_bytes(buf))
+}
+
+fn read_footer<R: Read + Seek>(reader: &mut R) -> io::Result<(String, String)> {
+    // 1. Read footer_offset from the last 8 bytes
+    reader.seek(SeekFrom::End(-8))?;
+    let mut offset_buf = [0u8; 8];
+    reader.read_exact(&mut offset_buf)?;
+    let footer_offset = u64::from_le_bytes(offset_buf);
+
+    // 2. Seek to footer start and read min_key
+    reader.seek(SeekFrom::Start(footer_offset))?;
+    let mut len_buf = [0u8; 4];
+    reader.read_exact(&mut len_buf)?;
+    let min_key_len = u32::from_le_bytes(len_buf) as usize;
+    let mut min_key_bytes = vec![0u8; min_key_len];
+    reader.read_exact(&mut min_key_bytes)?;
+    let min_key = String::from_utf8(min_key_bytes)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid min_key: {e}")))?;
+
+    // 3. Read max_key
+    reader.read_exact(&mut len_buf)?;
+    let max_key_len = u32::from_le_bytes(len_buf) as usize;
+    let mut max_key_bytes = vec![0u8; max_key_len];
+    reader.read_exact(&mut max_key_bytes)?;
+    let max_key = String::from_utf8(max_key_bytes)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid max_key: {e}")))?;
+
+    Ok((min_key, max_key))
 }
