@@ -38,12 +38,13 @@ pub struct DecodedRecord {
     pub timestamp: u64,
 }
 
-pub fn write_record<W: Write>(
-    writer: &mut W,
+/// Encodes a record into a buffer in the format: [length:u32][crc32:u32][payload]
+/// where payload is: [kind:u8][key_len_varint][key][value_len_varint][value]
+fn encode_record_to_buffer(
     kind: RecordKind,
     key: &str,
     value: &[u8],
-) -> io::Result<()> {
+) -> io::Result<Vec<u8>> {
     let key_len: u32 = key
         .len()
         .try_into()
@@ -76,9 +77,23 @@ pub fn write_record<W: Write>(
     hasher.update(&payload);
     let crc32 = hasher.finalize();
 
-    writer.write_all(&length.to_le_bytes())?;
-    writer.write_all(&crc32.to_le_bytes())?;
-    writer.write_all(&payload)?;
+    // Build complete record: [length:u32][crc32:u32][payload]
+    let mut buffer = Vec::with_capacity(length.to_le_bytes().len() + crc32.to_le_bytes().len() + payload.len());
+    buffer.extend_from_slice(&length.to_le_bytes());
+    buffer.extend_from_slice(&crc32.to_le_bytes());
+    buffer.extend_from_slice(&payload);
+    
+    Ok(buffer)
+}
+
+pub fn write_record<W: Write>(
+    writer: &mut W,
+    kind: RecordKind,
+    key: &str,
+    value: &[u8],
+) -> io::Result<()> {
+    let buffer = encode_record_to_buffer(kind, key, value)?;
+    writer.write_all(&buffer)?;
     Ok(())
 }
 
@@ -233,4 +248,17 @@ fn decode_var_u32(buffer: &[u8], cursor: &mut usize) -> io::Result<u32> {
         io::ErrorKind::InvalidData,
         "varint too long while decoding record",
     ))
+}
+
+/// Encodes a record into the provided buffer for batching.
+/// Uses the shared encoding logic to avoid code duplication.
+pub fn encode_batch_records(
+    buffer: &mut Vec<u8>,
+    kind: RecordKind,
+    key: &str,
+    value: &[u8],
+) -> io::Result<()> {
+    let encoded = encode_record_to_buffer(kind, key, value)?;
+    buffer.extend_from_slice(&encoded);
+    Ok(())
 }
